@@ -24,12 +24,20 @@ def main():
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
+    # --- DEBUG: Check OpenCV GStreamer Support ---
+    build_info = cv2.getBuildInformation()
+    if "GStreamer: NO" in build_info:
+        print("\n\nCRITICAL WARNING: Your OpenCV does NOT support GStreamer.")
+        print("The CSI camera will NOT work with this version.")
+        print("SOLUTION: Run 'pip3 uninstall opencv-python' and then 'sudo apt-get install python3-opencv'\n\n")
+
     print("Starting Camera...")
     
     def get_pipeline(sensor_id):
+        # We use 1920x1080 as your "Truth" test confirmed this mode works.
         return (
             f"nvarguscamerasrc sensor-id={sensor_id} ! "
-            "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
+            "video/x-raw(memory:NVMM), width=1920, height=1080, format=NV12, framerate=30/1 ! "
             "nvvidconv flip-method=0 ! "
             "video/x-raw, width=640, height=360, format=BGRx ! "
             "videoconvert ! "
