@@ -35,10 +35,11 @@ def main():
     
     def get_pipeline(sensor_id):
         # We use 1920x1080 as your "Truth" test confirmed this mode works.
+        # Added: flip-method=2 (common for mounted cams), and reduced fps to 21 to prevent timeouts
         return (
             f"nvarguscamerasrc sensor-id={sensor_id} ! "
-            "video/x-raw(memory:NVMM), width=1920, height=1080, format=NV12, framerate=30/1 ! "
-            "nvvidconv flip-method=0 ! "
+            "video/x-raw(memory:NVMM), width=1920, height=1080, format=NV12, framerate=21/1 ! "
+            "nvvidconv flip-method=2 ! "
             "video/x-raw, width=640, height=360, format=BGRx ! "
             "videoconvert ! "
             "video/x-raw, format=BGR ! appsink drop=1"
@@ -66,8 +67,9 @@ def main():
 
     while True:
         ret, frame = cap.read()
-        if not ret:
-            break
+        if not ret or frame is None:
+            print("Warning: Failed to grab frame. Skipping...")
+            continue # Skip loop if frame is bad
 
         # 1. Preprocess
         img = cv2.resize(frame, (IMG_WIDTH, IMG_HEIGHT))
