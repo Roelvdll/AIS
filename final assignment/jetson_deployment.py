@@ -25,19 +25,29 @@ def main():
     output_details = interpreter.get_output_details()
 
     print("Starting Camera...")
-    # Try GStreamer pipeline first (for CSI camera)
-    gst_pipeline = (
-        "nvarguscamerasrc ! "
-        "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
-        "nvvidconv flip-method=0 ! "
-        "video/x-raw, width=640, height=360, format=BGRx ! "
-        "videoconvert ! "
-        "video/x-raw, format=BGR ! appsink"
-    )
-    cap = cv2.VideoCapture(gst_pipeline, cv2.CAP_GSTREAMER)
+    
+    def get_pipeline(sensor_id):
+        return (
+            f"nvarguscamerasrc sensor-id={sensor_id} ! "
+            "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
+            "nvvidconv flip-method=0 ! "
+            "video/x-raw, width=640, height=360, format=BGRx ! "
+            "videoconvert ! "
+            "video/x-raw, format=BGR ! appsink drop=1"
+        )
 
+    # 1. Try CSI Camera on Sensor 0
+    print("Trying CSI Camera (Sensor 0)...")
+    cap = cv2.VideoCapture(get_pipeline(0), cv2.CAP_GSTREAMER)
+
+    # 2. Try CSI Camera on Sensor 1 (if Sensor 0 fails)
     if not cap.isOpened():
-        print("CSI Camera not found. Trying USB...")
+        print("Sensor 0 failed. Trying CSI Camera (Sensor 1)...")
+        cap = cv2.VideoCapture(get_pipeline(1), cv2.CAP_GSTREAMER)
+
+    # 3. Fallback to standard V4L2 (USB)
+    if not cap.isOpened():
+        print("CSI pipeline failed. Trying generic VideoCapture(0)...")
         cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
