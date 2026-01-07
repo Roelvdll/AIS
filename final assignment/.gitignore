@@ -1,0 +1,4 @@
+## add git ignore rule that ignores the children folders of dataset folder
+dataset/*/
+## but not the dataset folder itself
+!dataset/
