@@ -1,10 +1,21 @@
 import cv2
 import os
 from datetime import datetime
+import threading
+from flask import Flask, Response
+import time
 
 # --- CONFIGURATION ---
 OUTPUT_DIR = "jetson_dataset"  # Where to save images
 CLASSES = ['middle', 'peace', 'woensel']  # Your 3 gestures
+STREAM_PORT = 5000  # Port for web streaming
+
+# Global variables for streaming
+current_frame = None
+frame_lock = threading.Lock()
+
+# Flask app for streaming
+app = Flask(__name__)
 
 def get_pipeline():
     """GStreamer pipeline for Jetson CSI camera"""
@@ -16,6 +27,77 @@ def get_pipeline():
         "videoconvert ! "
         "video/x-raw, format=BGR ! appsink drop=1"
     )
+
+def generate_frames():
+    """Generator function for MJPEG streaming"""
+    global current_frame
+    while True:
+        with frame_lock:
+            if current_frame is None:
+                continue
+            frame = current_frame.copy()
+        
+        # Encode frame as JPEG
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret:
+            continue
+        
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+@app.route('/video_feed')
+def video_feed():
+    """Video streaming route"""
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/')
+def index():
+    """Homepage with video stream"""
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Jetson Camera Capture</title>
+        <style>
+            body {{ 
+                font-family: Arial; 
+                text-align: center; 
+                background: #222;
+                color: white;
+                padding: 20px;
+            }}
+            img {{ 
+                max-width: 90%; 
+                border: 3px solid #0f0;
+                margin: 20px auto;
+            }}
+            h1 {{ color: #0f0; }}
+            .instructions {{
+                background: #333;
+                padding: 20px;
+                border-radius: 10px;
+                margin: 20px auto;
+                max-width: 600px;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>📷 Jetson Camera - Image Capture Tool</h1>
+        <div class="instructions">
+            <h2>Instructions</h2>
+            <p>Go back to your SSH terminal and press:</p>
+            <p><strong>1</strong> = Capture MIDDLE gesture</p>
+            <p><strong>2</strong> = Capture PEACE gesture</p>
+            <p><strong>3</strong> = Capture WOENSEL gesture</p>
+            <p><strong>q</strong> = Quit</p>
+        </div>
+        <img src="/video_feed" alt="Live Camera Feed">
+    </body>
+    </html>
+    """
+    return html
 
 def main():
     # Create output directories
